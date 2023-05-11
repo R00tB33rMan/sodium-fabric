@@ -51,6 +51,8 @@
   "sodium.options.always_defer_chunk_updates.tooltip": "If enabled, rendering will never wait for chunk updates to finish, even if they are important. This can greatly improve frame rates in some scenarios, but it may create significant visual lag in the world.",
   "sodium.options.use_no_error_context.name": "Use No Error Context",
   "sodium.options.use_no_error_context.tooltip": "If enabled, the OpenGL context will be created with error checking disabled. This may slightly improve performance, but it also increases the risk that the game will crash instead of gracefully handling OpenGL errors. You should disable this option if you are experiencing sudden unexplained crashes.",
+  "sodium.options.raycast_culling.name": "Use Raycast Culling",
+  "sodium.options.raycast_culling.tooltip": "If enabled, the number of chunks detected for raycasting will be reduced to five, instead of all chunks. This will improve performance but may lose some accuracy.",
   "sodium.options.buttons.undo": "Undo",
   "sodium.options.buttons.apply": "Apply",
   "sodium.options.buttons.donate": "Buy us a coffee!"

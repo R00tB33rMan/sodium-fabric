@@ -311,6 +311,7 @@ public class SodiumGameOptionPages {
                         .setName(Text.translatable("sodium.options.raycast_culling.name"))
                         .setTooltip(Text.translatable("sodium.options.raycast_culling.tooltip"))
                         .setControl(TickBoxControl::new)
+                        .setImpact(OptionImpact.MEDIUM)
                         .setBinding((opts, value) -> opts.performance.useRaycastCulling = value, opts -> opts.performance.useRaycastCulling)
                         .setFlags(OptionFlag.REQUIRES_RENDERER_UPDATE)
                         .build()
