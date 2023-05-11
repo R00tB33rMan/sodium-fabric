@@ -10,8 +10,10 @@ public class BiomeCache {
     private static final int SIZE = 3 * 4; // 3 chunks * 4 biomes per chunk
 
     // Arrays are in ZYX order
-    private final Biome[] biomes = new Biome[SIZE * SIZE * SIZE];
-    private final boolean[] uniform = new boolean[SIZE * SIZE * SIZE];
+    private final Biome[] biomes = new Biome[(SIZE - 2) * (SIZE - 2) * (SIZE - 2)];
+    //Uniform looks at the own biome block and its 7 positive neighbors.
+    //Index using the y and z coordinate. The x coordinate is used to access a single bit of each short.
+    private final short[] uniform = new short[(SIZE - 3) * (SIZE - 3)];
     private final BiasMap bias = new BiasMap();
 
     private long biomeSeed;
@@ -43,28 +45,32 @@ public class BiomeCache {
         }
     }
 
+    private static boolean isBiomeCoordInBounds(int coord) {
+        return coord >= 1 && coord < (SIZE - 1);
+    }
+
     private void copySectionBiomeData(WorldSlice slice, int sectionX, int sectionY, int sectionZ) {
-        var section = slice.getSection(sectionX, sectionY, sectionZ);
-
-        for (int x = 0; x < 4; x++) {
-            for (int y = 0; y < 4; y++) {
-                for (int z = 0; z < 4; z++) {
-                    int biomeX = (sectionX * 4) + x;
-                    int biomeY = (sectionY * 4) + y;
-                    int biomeZ = (sectionZ * 4) + z;
-
-                    this.biomes[dataArrayIndex(biomeX, biomeY, biomeZ)] = section.getBiome(x, y, z).value();
+        var section = slice.getSection(sectionX, sectionY, sectionZ );
+        int maxX = Math.min(SIZE - 1, 4 * sectionX + 4);
+        int maxY = Math.min(SIZE - 1, 4 * sectionY + 4);
+        int maxZ = Math.min(SIZE - 1, 4 * sectionZ + 4);
+        for (int biomeY = Math.max(1, 4 * sectionY); biomeY < maxY; biomeY++) {
+            for (int biomeZ = Math.max(1, 4 * sectionZ); biomeZ < maxZ; biomeZ++) {
+                for (int biomeX = Math.max(1, 4 * sectionX); biomeX < maxX ; biomeX++) {
+                    this.biomes[biomeArrayIndex(biomeX, biomeY, biomeZ)] = section.getBiome(biomeX & 0x3, biomeY & 0x3, biomeZ & 0x3).value();
                 }
             }
         }
     }
 
     private void calculateUniform() {
-        for (int x = 2; x < 10; x++) {
-            for (int y = 2; y < 10; y++) {
-                for (int z = 2; z < 10; z++) {
-                    this.uniform[dataArrayIndex(x, y, z)] = this.hasUniformNeighbors(x, y, z);
+        for (int y = 1; y < (SIZE - 2); y++) {
+            for (int z = 1; z < (SIZE - 2); z++) {
+                int uniform = 0;
+                for (int x = 1; x < (SIZE - 2); x++) {
+                    uniform |= (this.hasUniformNeighbors(x, y, z) ? 1 : 0) << x;
                 }
+                this.uniform[uniformArrayIndex(y, z)] = (short) uniform;
             }
         }
     }
@@ -88,7 +94,7 @@ public class BiomeCache {
                     int worldCellZ = offsetZ + cellZ;
                     long seedXYZ = SeedMixer.mixSeed(seedXY, worldCellZ);
 
-                    this.calculateBias(dataArrayIndex(cellX, cellY, cellZ),
+                    this.calculateBias(biasArrayIndex(cellX, cellY, cellZ),
                             worldCellX, worldCellY, worldCellZ, seedXYZ);
                 }
             }
@@ -109,16 +115,16 @@ public class BiomeCache {
     }
 
     private boolean hasUniformNeighbors(int x, int y, int z) {
-        Biome biome = this.biomes[dataArrayIndex(x, y, z)];
-        
-        int minX = x - 1, maxX = x + 1;
-        int minY = y - 1, maxY = y + 1;
-        int minZ = z - 1, maxZ = z + 1;
+        Biome biome = this.biomes[biomeArrayIndex(x, y, z)];
 
-        for (int adjX = minX; adjX <= maxX; adjX++) {
-            for (int adjY = minY; adjY <= maxY; adjY++) {
-                for (int adjZ = minZ; adjZ <= maxZ; adjZ++) {
-                    if (this.biomes[dataArrayIndex(adjX, adjY, adjZ)] != biome) {
+        int maxX = x + 1;
+        int maxY = y + 1;
+        int maxZ = z + 1;
+
+        for (int adjY = y; adjY <= maxY; adjY++) {
+            for (int adjZ = z; adjZ <= maxZ; adjZ++) {
+                for (int adjX = x; adjX <= maxX; adjX++) {
+                    if (this.biomes[biomeArrayIndex(adjX, adjY, adjZ)] != biome) {
                         return false;
                     }
                 }
@@ -129,13 +135,12 @@ public class BiomeCache {
     }
 
     public Biome getBiome(int x, int y, int z) {
-        int centerIndex = dataArrayIndex(
-                BiomeCoords.fromBlock(x - 2),
-                BiomeCoords.fromBlock(y - 2),
-                BiomeCoords.fromBlock(z - 2));
+        int biomeX = BiomeCoords.fromBlock(x - 2);
+        int biomeY = BiomeCoords.fromBlock(y - 2);
+        int biomeZ = BiomeCoords.fromBlock(z - 2);
 
-        if (this.uniform[centerIndex]) {
-            return this.biomes[centerIndex];
+        if ((this.uniform[uniformArrayIndex(biomeY, biomeZ)] & (1 << biomeX)) != 0) {
+            return this.biomes[biomeArrayIndex(biomeX, biomeY, biomeZ)];
         }
 
         return this.getBiomeUsingVoronoi(x, y, z);
@@ -173,7 +178,7 @@ public class BiomeCache {
             float adjFracY = fracY - (dirY ? 1.0f : 0.0f);
             float adjFracZ = fracZ - (dirZ ? 1.0f : 0.0f);
 
-            int biasIndex = dataArrayIndex(adjIntX, adjIntY, adjIntZ);
+            int biasIndex = biasArrayIndex(adjIntX, adjIntY, adjIntZ);
 
             float biasX = biasToVector(this.bias.getX(biasIndex));
             float biasY = biasToVector(this.bias.getY(biasIndex));
@@ -186,7 +191,7 @@ public class BiomeCache {
             float distance = distanceX + distanceY + distanceZ;
 
             if (closestDistance > distance) {
-                closestArrayIndex = biasIndex;
+                closestArrayIndex = biomeArrayIndex(adjIntX, adjIntY, adjIntZ);
                 closestDistance = distance;
             }
         }
@@ -194,8 +199,16 @@ public class BiomeCache {
         return this.biomes[closestArrayIndex];
     }
 
-    private static int dataArrayIndex(int x, int y, int z) {
-        return (x * SIZE * SIZE) + (y * SIZE) + z;
+    private static int biomeArrayIndex(int x, int y, int z) {
+        return ((y - 1) * (SIZE - 2) * (SIZE - 2)) + ((z - 1) * (SIZE - 2)) + x - 1;
+    }
+
+    private static int biasArrayIndex(int x, int y, int z) {
+        return (y * (SIZE * SIZE)) + z * SIZE + x;
+    }
+
+    private static int uniformArrayIndex(int y, int z) {
+        return ((y - 1) * (SIZE - 3)) + z - 1;
     }
 
     // Computes a vector position using the given bias. This normalizes the bias
