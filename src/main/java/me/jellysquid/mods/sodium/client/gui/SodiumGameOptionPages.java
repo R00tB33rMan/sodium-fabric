@@ -309,7 +309,7 @@ public class SodiumGameOptionPages {
                         .build())
                 .add(OptionImpl.createBuilder(boolean.class, sodiumOpts)
                         .setName(Text.translatable("sodium.options.raycast_culling.name"))
-                        .setTooltip(Text.translatable("sodium.options.raycast_culling..tooltip"))
+                        .setTooltip(Text.translatable("sodium.options.raycast_culling.tooltip"))
                         .setControl(TickBoxControl::new)
                         .setBinding((opts, value) -> opts.performance.useRaycastCulling = value, opts -> opts.performance.useRaycastCulling)
                         .setFlags(OptionFlag.REQUIRES_RENDERER_UPDATE)
